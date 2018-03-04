@@ -113,6 +113,10 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
         panel_displacement++;
 
+        if (autohide == "Autohide") {
+            update_panel_dimensions ();
+        }
+
         animate_panel ();
 
         return true;
