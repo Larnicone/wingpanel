@@ -35,7 +35,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
     private bool expanded = false;
     private int panel_displacement;
     private uint shrink_timeout = 0;
-    private bool autohide = Services.PanelSettings.get_default ().autohide;
+    private string autohide = Services.PanelSettings.get_default ().autohide;
 
     public PanelWindow (Gtk.Application application) {
         Object (
@@ -81,7 +81,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         application.add_accelerator ("<Control><Shift>Tab", "app.cycle-back", null);
 
         box.add(panel);
-        if (autohide == true) {
+        if (autohide == "Autohide" || autohide == "Floating") {
             box.enter_notify_event.connect (reactivate);
             box.leave_notify_event.connect (on_idle);
         }
@@ -97,7 +97,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
         panel_displacement--;
 
-        if (autohide == false) { 
+        if (autohide == "Autohide" || autohide == "Disabled") { 
             update_panel_dimensions ();
         }
         animate_panel ();
@@ -123,7 +123,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
         Services.BackgroundManager.initialize (this.monitor_number, panel_height);
 
-        if (autohide == false) { 
+        if (autohide == "Disabled") { 
             timeout = Timeout.add (300 / panel_height, animation_step);
         } else {
             panel_displacement--;
