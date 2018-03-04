@@ -123,7 +123,12 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
         Services.BackgroundManager.initialize (this.monitor_number, panel_height);
 
-        timeout = Timeout.add (100 / panel_height, animation_step);
+        if (autohide == false) { 
+            timeout = Timeout.add (300 / panel_height, animation_step);
+        } else {
+            panel_displacement--;
+            animate_panel ();
+        }
     }
 
     private bool on_idle () {
