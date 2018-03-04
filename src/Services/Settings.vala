@@ -23,6 +23,8 @@ namespace Wingpanel.Services {
 
         public bool use_transparency { get; set; }
 
+        public bool autohide { get; set; }
+
         public PanelSettings () {
             base ("org.pantheon.desktop.wingpanel");
         }
