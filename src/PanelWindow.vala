@@ -81,10 +81,13 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         application.add_accelerator ("<Control><Shift>Tab", "app.cycle-back", null);
 
         box.add(panel);
-        if (autohide == "Autohide" || autohide == "Floating") {
-            box.enter_notify_event.connect (reactivate);
-            box.leave_notify_event.connect (on_idle);
-        }
+        box.enter_notify_event.connect (show_panel);
+        box.leave_notify_event.connect (hide_panel);
+
+        Services.PanelSettings.get_default ().notify["autohide"].connect (() => {
+            autohide = Services.PanelSettings.get_default ().autohide;
+            update_autohide_mode ();
+        });
 
         add (box);
     }
@@ -97,7 +100,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
         panel_displacement--;
 
-        if (autohide == "Autohide" || autohide == "Disabled") { 
+        if (autohide != "Floating") {
             update_panel_dimensions ();
         }
         animate_panel ();
@@ -113,10 +116,9 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
         panel_displacement++;
 
-        if (autohide == "Autohide") {
+        if (autohide == "Autohide" || autohide == "Dodge") {
             update_panel_dimensions ();
         }
-
         animate_panel ();
 
         return true;
@@ -127,7 +129,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
         Services.BackgroundManager.initialize (this.monitor_number, panel_height);
 
-        if (autohide == "Disabled") { 
+        if (autohide == "Disabled" || autohide == "Dodge") {
             timeout = Timeout.add (300 / panel_height, animation_step);
         } else {
             panel_displacement--;
@@ -135,24 +137,51 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         }
     }
 
-    private bool on_idle () {
-        if (timeout > 0) {
-            Source.remove (timeout);
+    private bool destrut_autohide () {
+        if (panel_displacement >= -1) {
+            timeout = 0;
+            return false;
         }
 
-        timeout = Timeout.add (100 / panel_height, animation_unstep);
+        panel_displacement++;
+
+        update_panel_dimensions ();
+
+        animate_panel ();
 
         return true;
     }
 
-    private bool reactivate () {
-        if (timeout > 0) {
-            Source.remove (timeout);
+    private bool hide_panel () {
+        if (autohide != "Disabled") {
+            if (timeout > 0) {
+                Source.remove (timeout);
+            }
+            if (autohide == "Dodge") {
+                timeout = Timeout.add (300 / panel_height, animation_unstep);
+            } else {
+                timeout = Timeout.add (100 / panel_height, animation_unstep);
+            }
         }
-
-        timeout = Timeout.add (100 / panel_height, animation_step);
-
         return true;
+    }
+
+    private bool show_panel () {
+        if (autohide != "Disabled") {
+            if (timeout > 0) {
+                Source.remove (timeout);
+            }
+            timeout = Timeout.add (100 / panel_height, animation_step);
+        }
+        return true;
+    }
+
+    private void update_autohide_mode () {
+        if (autohide == "Disabled" || autohide == "Dodge") {
+            timeout = Timeout.add (300 / panel_height, animation_step);
+        } else {
+            timeout = Timeout.add (100 / panel_height, destrut_autohide);
+        }
     }
 
     private void update_panel_dimensions () {
