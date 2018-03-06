@@ -9,7 +9,7 @@
 		<key type="s" name="autohide">
 			<choices>
 				<choice value='Autohide'/>
-				<choice value='Floating'/>
+				<choice value='Float'/>
 				<choice value='Disabled'/>
 			</choices>
 			<default>'Disabled'</default>

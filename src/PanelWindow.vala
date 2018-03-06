@@ -22,8 +22,6 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
     private Widgets.Panel panel;
 
-    private Gtk.EventBox box;
-
     uint timeout;
 
     private int monitor_number;
@@ -35,6 +33,8 @@ public class Wingpanel.PanelWindow : Gtk.Window {
     private bool expanded = false;
     private int panel_displacement;
     private uint shrink_timeout = 0;
+    private bool hiding = false;
+    private bool restrut = true;
     private string autohide = Services.PanelSettings.get_default ().autohide;
 
     public PanelWindow (Gtk.Application application) {
@@ -55,12 +55,11 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         style_context.add_class (Widgets.StyleClass.PANEL);
         style_context.add_class (Gtk.STYLE_CLASS_MENUBAR);
 
-        this.add_events (Gdk.EventMask.ENTER_NOTIFY_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK);
-        this.enter_notify_event.connect (show_panel);
-        this.leave_notify_event.connect (hide_panel);
         this.screen.size_changed.connect (update_panel_dimensions);
         this.screen.monitors_changed.connect (update_panel_dimensions);
         this.screen_changed.connect (update_visual);
+        this.enter_notify_event.connect (show_panel);
+        this.leave_notify_event.connect (hide_panel);
 
         update_visual ();
 
@@ -89,30 +88,21 @@ public class Wingpanel.PanelWindow : Gtk.Window {
     }
 
     private bool animation_step () {
-        if (panel_displacement <= panel_height * (-1)) {
-            timeout = 0;
-            return false;
+        if (hiding != true) {
+            if (panel_displacement <= panel_height * (-1)) {
+                timeout = 0;
+                return false;
+            }
+            panel_displacement--;
+        } else {
+            if (panel_displacement >= -1 || popover_manager.current_indicator != null) {
+                timeout = 0;
+                return false;
+            }
+            panel_displacement++;
         }
 
-        panel_displacement--;
-
-        if (autohide != "Floating") {
-            update_panel_dimensions ();
-        }
-        animate_panel ();
-
-        return true;
-    }
-
-    private bool animation_unstep () {
-        if (panel_displacement >= -1 || popover_manager.current_indicator != null) {
-            timeout = 0;
-            return false;
-        }
-
-        panel_displacement++;
-
-        if (autohide == "Autohide" || autohide == "Dodge") {
+        if (restrut == true) {
             update_panel_dimensions ();
         }
         animate_panel ();
@@ -126,6 +116,8 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         Services.BackgroundManager.initialize (this.monitor_number, panel_height);
 
         if (autohide == "Disabled" || autohide == "Dodge") {
+            hiding = false;
+            restrut = true;
             timeout = Timeout.add (300 / panel_height, animation_step);
         } else {
             panel_displacement--;
@@ -133,30 +125,21 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         }
     }
 
-    private bool destrut_autohide () {
-        if (panel_displacement >= -1) {
-            timeout = 0;
-            return false;
-        }
-
-        panel_displacement++;
-
-        update_panel_dimensions ();
-
-        animate_panel ();
-
-        return true;
-    }
-
     private bool hide_panel () {
         if (autohide != "Disabled") {
+            hiding = true;
             if (timeout > 0) {
                 Source.remove (timeout);
             }
             if (autohide == "Dodge") {
-                timeout = Timeout.add (300 / panel_height, animation_unstep);
-            } else {
-                timeout = Timeout.add (100 / panel_height, animation_unstep);
+                restrut = true;
+                timeout = Timeout.add (300 / panel_height, animation_step);
+            } else if (autohide == "Autohide") {
+                restrut = true;
+                timeout = Timeout.add (100 / panel_height, animation_step);
+            } else if (autohide == "Float") {
+                restrut = false;
+                timeout = Timeout.add (100 / panel_height, animation_step);
             }
         }
         return true;
@@ -164,19 +147,32 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
     private bool show_panel () {
         if (autohide != "Disabled") {
+            hiding = false;
             if (timeout > 0) {
                 Source.remove (timeout);
             }
-            timeout = Timeout.add (100 / panel_height, animation_step);
+            if (autohide == "Dodge") {
+                restrut = true;
+                timeout = Timeout.add (300 / panel_height, animation_step);
+            } else if (autohide == "Autohide") {
+                restrut = true;
+                timeout = Timeout.add (100 / panel_height, animation_step);
+            } else if (autohide == "Float") {
+                restrut = false;
+                timeout = Timeout.add (100 / panel_height, animation_step);
+            }
         }
         return true;
     }
 
     private void update_autohide_mode () {
+        restrut = true;
         if (autohide == "Disabled" || autohide == "Dodge") {
+            hiding = false;
             timeout = Timeout.add (300 / panel_height, animation_step);
         } else {
-            timeout = Timeout.add (100 / panel_height, destrut_autohide);
+            hiding = true;
+            timeout = Timeout.add (100 / panel_height, animation_step);
         }
     }
 
