@@ -55,6 +55,9 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         style_context.add_class (Widgets.StyleClass.PANEL);
         style_context.add_class (Gtk.STYLE_CLASS_MENUBAR);
 
+        this.add_events (Gdk.EventMask.ENTER_NOTIFY_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK);
+        this.enter_notify_event.connect (show_panel);
+        this.leave_notify_event.connect (hide_panel);
         this.screen.size_changed.connect (update_panel_dimensions);
         this.screen.monitors_changed.connect (update_panel_dimensions);
         this.screen_changed.connect (update_visual);
@@ -62,9 +65,6 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         update_visual ();
 
         popover_manager = new Services.PopoverManager (this);
- 
-        box = new Gtk.EventBox();
-        box.add_events (Gdk.EventMask.ENTER_NOTIFY_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK);
 
         panel = new Widgets.Panel (popover_manager);
         panel.realize.connect (on_realize);
@@ -80,16 +80,12 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         application.add_accelerator ("<Control>Tab", "app.cycle", null);
         application.add_accelerator ("<Control><Shift>Tab", "app.cycle-back", null);
 
-        box.add(panel);
-        box.enter_notify_event.connect (show_panel);
-        box.leave_notify_event.connect (hide_panel);
-
         Services.PanelSettings.get_default ().notify["autohide"].connect (() => {
             autohide = Services.PanelSettings.get_default ().autohide;
             update_autohide_mode ();
         });
 
-        add (box);
+        add (panel);
     }
 
     private bool animation_step () {
