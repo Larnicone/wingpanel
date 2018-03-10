@@ -59,6 +59,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         this.screen.monitors_changed.connect (update_panel_dimensions);
         this.screen_changed.connect (update_visual);
         this.enter_notify_event.connect (show_panel);
+        this.motion_notify_event.connect (show_panel);
         this.leave_notify_event.connect (hide_panel);
 
         update_visual ();
