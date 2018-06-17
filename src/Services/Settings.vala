@@ -26,7 +26,7 @@ namespace Wingpanel.Services {
         public string autohide { get; set; }
 
         public PanelSettings () {
-            base ("org.pantheon.desktop.wingpanel");
+            base ("io.elementary.desktop.wingpanel");
         }
 
         public static PanelSettings get_default () {
