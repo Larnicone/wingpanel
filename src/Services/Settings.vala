@@ -25,6 +25,8 @@ namespace Wingpanel.Services {
 
         public string autohide { get; set; }
 
+        public int delay { get; set; }
+
         public PanelSettings () {
             base ("io.elementary.desktop.wingpanel");
         }
