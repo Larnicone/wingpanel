@@ -76,6 +76,7 @@ set (LIB_PACKAGES
   gee-0.8
   gmodule-2.0
   gtk+-3.0
+  libwnck-3.0
 )
 
 set (LIB_PKG
@@ -84,10 +85,13 @@ set (LIB_PKG
   gee-0.8
   gmodule-2.0
   gtk+-3.0>=3.22
+  libwnck-3.0>=3.24
 )
 find_package(PkgConfig)
 
 pkg_check_modules (LIB REQUIRED ${LIB_PKG})
+
+add_definitions (-DWNCK_I_KNOW_THIS_IS_UNSTABLE)
 
 set (GLOBAL_VALAC_OPTIONS
   --vapidir=${CMAKE_BINARY_DIR}/lib

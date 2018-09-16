@@ -10,6 +10,8 @@
 			<choices>
 				<choice value='Autohide'/>
 				<choice value='Float'/>
+				<choice value='Dodge'/>
+				<choice value='Dodge-Float'/>
 				<choice value='Disabled'/>
 			</choices>
 			<default>'Disabled'</default>

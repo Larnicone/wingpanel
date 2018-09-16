@@ -34,9 +34,10 @@ public class Wingpanel.PanelWindow : Gtk.Window {
     private int panel_displacement;
     private uint shrink_timeout = 0;
     private bool hiding = false;
-    private bool restrut = true;
+    private bool strut = true;
     private string autohide = Services.PanelSettings.get_default ().autohide;
     private int autohide_delay = Services.PanelSettings.get_default ().delay;
+    private Wnck.Screen wnck_screen = Wnck.Screen.get_default ();
 
     public PanelWindow (Gtk.Application application) {
         Object (
@@ -59,6 +60,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         this.screen.size_changed.connect (update_panel_dimensions);
         this.screen.monitors_changed.connect (update_panel_dimensions);
         this.screen_changed.connect (update_visual);
+        wnck_screen.active_window_changed.connect (active_window_changed);
         this.enter_notify_event.connect (show_panel);
         this.motion_notify_event.connect (show_panel);
         this.leave_notify_event.connect (hide_panel);
@@ -94,24 +96,24 @@ public class Wingpanel.PanelWindow : Gtk.Window {
     }
 
     private bool animation_step () {
-        if (hiding != true) {
-            if (panel_displacement <= panel_height * (-1)) {
-                timeout = 0;
-                if (restrut == true) {
-                    update_panel_dimensions ();
-                }
-                return false;
-            }
-            panel_displacement--;
-        } else {
+        if (hiding) {
             if (panel_displacement >= -1 || popover_manager.current_indicator != null) {
                 timeout = 0;
-                if (restrut == true) {
+                if (strut == true) {
                     update_panel_dimensions ();
                 }
                 return false;
             }
             panel_displacement++;
+        } else {
+            if (panel_displacement <= panel_height * (-1)) {
+                timeout = 0;
+                if (strut == true) {
+                    update_panel_dimensions ();
+                }
+                return false;
+            }
+            panel_displacement--;
         }
 
         animate_panel ();
@@ -124,64 +126,146 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
         Services.BackgroundManager.initialize (this.monitor_number, panel_height);
 
-        if (autohide == "Disabled" || autohide == "Dodge") {
-            hiding = false;
-            restrut = true;
-            timeout = Timeout.add (300 / panel_height, animation_step);
+        update_autohide_mode ();
+    }
+
+    private void active_window_changed (Wnck.Window? prev_active_window) {
+        unowned Wnck.Window? active_window = wnck_screen.get_active_window();
+        if (autohide == "Dodge" || autohide == "Dodge-Float")
+            update_visibility_active_change (active_window);
+
+        if (prev_active_window != null)
+            prev_active_window.state_changed.disconnect (active_window_state_changed);
+        if (active_window != null)
+            active_window.state_changed.connect (active_window_state_changed);
+    }
+
+    private void active_window_state_changed (Wnck.Window? window,
+            Wnck.WindowState changed_mask, Wnck.WindowState new_state) {
+        if (autohide == "Dodge" || autohide == "Dodge-Float")
+            update_visibility_active_change (window);
+    }
+
+    private void update_visibility_active_change (Wnck.Window? active_window) {
+        if (should_hide_active_change (active_window)) {
+            hide_panel ();
         } else {
-            panel_displacement--;
-            animate_panel ();
+            show_panel ();
         }
     }
 
+    private bool should_hide_active_change (Wnck.Window? active_window) {
+        unowned Wnck.Workspace active_workspace = wnck_screen.get_active_workspace ();
+
+        return ((active_window != null) && !active_window.is_minimized () && right_type (active_window)
+                && active_window.is_visible_on_workspace (active_workspace)
+                && (active_window.get_window_type () == Wnck.WindowType.DIALOG) ?
+                    would_intersect_shown_panel (active_window) :
+                    (in_panel_x_range (active_window) && is_maximized_at_all (active_window)));
+    }
+
+    private bool would_intersect_shown_panel (Wnck.Window? window) {
+        Gdk.Rectangle shown_panel_rect = Gdk.Rectangle ();
+        shown_panel_rect.x = monitor_x;
+        shown_panel_rect.y = monitor_y;
+        shown_panel_rect.width = monitor_width;
+        shown_panel_rect.height = panel_height;
+
+        int xp, yp, widthp, heightp;
+        window.get_geometry (out xp, out yp, out widthp, out heightp);
+
+        Gdk.Rectangle window_rect = Gdk.Rectangle ();
+        window_rect.x = xp;
+        window_rect.width = widthp;
+        if (strut && is_maximized_at_all (window)) {
+            window_rect.y = yp - panel_height;
+            window_rect.height = heightp + panel_height;
+        } else {
+            window_rect.y = yp;
+            window_rect.height = heightp;
+        }
+
+        return window_rect.intersect (shown_panel_rect, null);
+    }
+
+    private bool in_panel_x_range (Wnck.Window? window) {
+        int xp, yp, widthp, heightp;
+        window.get_geometry (out xp, out yp, out widthp, out heightp);
+        if (xp > monitor_x)
+            return (monitor_x + monitor_width > xp);
+        else if (xp < monitor_x)
+            return (xp + widthp > monitor_x);
+        else
+            return (xp + widthp > 0 && monitor_x + monitor_width > 0);
+    }
+
+    private bool right_type (Wnck.Window? active_window) {
+        unowned Wnck.WindowType type = active_window.get_window_type ();
+        return (type == Wnck.WindowType.NORMAL || type == Wnck.WindowType.DIALOG
+                || type == Wnck.WindowType.TOOLBAR || type == Wnck.WindowType.UTILITY);
+    }
+
+    private bool is_maximized_at_all (Wnck.Window window) {
+        return (window.is_maximized_horizontally ()
+                || window.is_maximized_vertically ());
+    }
+
     private bool hide_panel () {
-        if (autohide != "Disabled") {
-            hiding = true;
-            if (timeout > 0) {
-                Source.remove (timeout);
-            }
-            if (popover_manager.current_indicator == null) {
-                Thread.usleep (autohide_delay * 1000);
-            }
-            if (autohide == "Autohide" || autohide == "Dodge") {
-                restrut = true;
-                timeout = Timeout.add (100 / panel_height, animation_step);
-            } else if (autohide == "Float") {
-                restrut = false;
-                timeout = Timeout.add (100 / panel_height, animation_step);
+        if (timeout > 0) {
+            Source.remove (timeout);
+        }
+        if (autohide == "Dodge" || autohide == "Dodge-Float") {
+            if (!should_hide_active_change (wnck_screen.get_active_window())) {
+                return true;
             }
         }
+        if (popover_manager.current_indicator == null) {
+            Thread.usleep (autohide_delay * 1000);
+        }
+        strut = true;
+        hiding = true;
+        timeout = Timeout.add (100 / panel_height, animation_step);
         return true;
     }
 
     private bool show_panel () {
-        if (autohide != "Disabled") {
-            hiding = false;
-            if (timeout > 0) {
-                Source.remove (timeout);
-            }
-            if (popover_manager.current_indicator == null) {
-                Thread.usleep (autohide_delay * 1000);
-            }
-            if (autohide == "Autohide" || autohide == "Dodge") {
-                restrut = true;
-                timeout = Timeout.add (100 / panel_height, animation_step);
-            } else if (autohide == "Float") {
-                restrut = false;
-                timeout = Timeout.add (100 / panel_height, animation_step);
-            }
+        if (timeout > 0) {
+            Source.remove (timeout);
         }
+        if (popover_manager.current_indicator == null) {
+            Thread.usleep (autohide_delay * 1000);
+        }
+        if (autohide == "Dodge-Float" || autohide == "Float") {
+            strut = false;
+        } else {
+            strut = true;
+        }
+        hiding = false;
+        timeout = Timeout.add (100 / panel_height, animation_step);
         return true;
     }
 
     private void update_autohide_mode () {
-        restrut = true;
-        if (autohide == "Disabled" || autohide == "Dodge") {
-            hiding = false;
-            timeout = Timeout.add (100 / panel_height, animation_step);
-        } else {
-            hiding = true;
-            timeout = Timeout.add (100 / panel_height, animation_step);
+        switch (autohide) {
+            case "Disabled":
+                this.enter_notify_event.disconnect (show_panel);
+                this.motion_notify_event.disconnect (show_panel);
+                this.leave_notify_event.disconnect (hide_panel);
+                show_panel ();
+                break;
+            case "Dodge":
+            case "Dodge-Float":
+                this.enter_notify_event.connect (show_panel);
+                this.motion_notify_event.connect (show_panel);
+                this.leave_notify_event.connect (hide_panel);
+                show_panel ();
+                break;
+            default:
+                this.enter_notify_event.connect (show_panel);
+                this.motion_notify_event.connect (show_panel);
+                this.leave_notify_event.connect (hide_panel);
+                hide_panel ();
+                break;
         }
     }
 
