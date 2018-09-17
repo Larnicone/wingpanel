@@ -60,10 +60,6 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         this.screen.size_changed.connect (update_panel_dimensions);
         this.screen.monitors_changed.connect (update_panel_dimensions);
         this.screen_changed.connect (update_visual);
-        wnck_screen.active_window_changed.connect (active_window_changed);
-        this.enter_notify_event.connect (show_panel);
-        this.motion_notify_event.connect (show_panel);
-        this.leave_notify_event.connect (hide_panel);
 
         update_visual ();
 
@@ -140,6 +136,18 @@ public class Wingpanel.PanelWindow : Gtk.Window {
             active_window.state_changed.connect (active_window_state_changed);
     }
 
+    private void active_workspace_changed (Wnck.Workspace? prev_active_workspace) {
+        unowned Wnck.Window? active_window = wnck_screen.get_active_window();
+        if (autohide == "Dodge" || autohide == "Dodge-Float")
+            update_visibility_active_change (active_window);
+    }
+
+    private void viewports_changed (Wnck.Screen? screen) {
+        unowned Wnck.Window? active_window = wnck_screen.get_active_window();
+        if (autohide == "Dodge" || autohide == "Dodge-Float")
+            update_visibility_active_change (active_window);
+    }
+
     private void active_window_state_changed (Wnck.Window? window,
             Wnck.WindowState changed_mask, Wnck.WindowState new_state) {
         if (autohide == "Dodge" || autohide == "Dodge-Float")
@@ -159,6 +167,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
         return ((active_window != null) && !active_window.is_minimized () && right_type (active_window)
                 && active_window.is_visible_on_workspace (active_workspace)
+                && active_window.is_in_viewport (active_workspace)
                 && (active_window.get_window_type () == Wnck.WindowType.DIALOG) ?
                     would_intersect_shown_panel (active_window) :
                     (in_panel_x_range (active_window) && is_maximized_at_all (active_window)));
@@ -255,6 +264,9 @@ public class Wingpanel.PanelWindow : Gtk.Window {
                 this.enter_notify_event.disconnect (show_panel);
                 this.motion_notify_event.disconnect (show_panel);
                 this.leave_notify_event.disconnect (hide_panel);
+                wnck_screen.active_window_changed.disconnect (active_window_changed);
+                wnck_screen.active_workspace_changed.disconnect (active_workspace_changed);
+                wnck_screen.viewports_changed.disconnect (viewports_changed);
                 show_panel ();
                 break;
             case "Dodge":
@@ -262,12 +274,18 @@ public class Wingpanel.PanelWindow : Gtk.Window {
                 this.enter_notify_event.connect (show_panel);
                 this.motion_notify_event.connect (show_panel);
                 this.leave_notify_event.connect (hide_panel);
+                wnck_screen.active_window_changed.connect (active_window_changed);
+                wnck_screen.active_workspace_changed.connect (active_workspace_changed);
+                wnck_screen.viewports_changed.connect (viewports_changed);
                 show_panel ();
                 break;
             default:
                 this.enter_notify_event.connect (show_panel);
                 this.motion_notify_event.connect (show_panel);
                 this.leave_notify_event.connect (hide_panel);
+                wnck_screen.active_window_changed.disconnect (active_window_changed);
+                wnck_screen.active_workspace_changed.disconnect (active_workspace_changed);
+                wnck_screen.viewports_changed.disconnect (viewports_changed);
                 hide_panel ();
                 break;
         }
