@@ -91,7 +91,8 @@ find_package(PkgConfig)
 
 pkg_check_modules (LIB REQUIRED ${LIB_PKG})
 
-add_definitions (-DWNCK_I_KNOW_THIS_IS_UNSTABLE)
+add_definitions (-DWNCK_I_KNOW_THIS_IS_UNSTABLE ${WNCK_CFLAGS})
+link_libraries (${WNCK_LIBRARIES})
 
 set (GLOBAL_VALAC_OPTIONS
   --vapidir=${CMAKE_BINARY_DIR}/lib
