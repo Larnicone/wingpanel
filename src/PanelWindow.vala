@@ -232,7 +232,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         if (timeout > 0) {
             Source.remove (timeout);
         }
-        if (popover_manager.current_indicator == null) {
+        if (popover_manager.current_indicator == null && autohide != "Disabled") {
             Thread.usleep (autohide_delay * 1000);
         }
         if (autohide == "Dodge-Float" || autohide == "Float") {
@@ -241,7 +241,11 @@ public class Wingpanel.PanelWindow : Gtk.Window {
             strut = true;
         }
         hiding = false;
-        timeout = Timeout.add (100 / panel_height, animation_step);
+        if (autohide == "Disabled") {
+            timeout = Timeout.add (300 / panel_height, animation_step);
+        } else {
+            timeout = Timeout.add (100 / panel_height, animation_step);
+        }
         return true;
     }
 
