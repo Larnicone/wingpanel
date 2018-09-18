@@ -216,7 +216,8 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
     private bool is_maximized_at_all (Wnck.Window window) {
         return (window.is_maximized_horizontally ()
-                || window.is_maximized_vertically ());
+                || window.is_maximized_vertically ()
+                || window.is_fullscreen ());
     }
 
     private bool hide_panel () {
