@@ -176,6 +176,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
     private void update_visibility_active_change (Wnck.Window? active_window) {
         if (should_hide_active_change (active_window)) {
+            this.leave_notify_event.connect (hide_panel);
             delay = false;
             hide_panel ();
         } else {
@@ -241,17 +242,17 @@ public class Wingpanel.PanelWindow : Gtk.Window {
             case "Autohide":
             case "Float":
                 delay = true;
-                hide_panel ();
                 wnck_screen.active_window_changed.disconnect (active_window_changed);
                 wnck_screen.active_workspace_changed.disconnect (active_workspace_changed);
                 wnck_screen.viewports_changed.disconnect (viewports_changed);
+                hide_panel ();
                 break;
             case "Dodge":
             case "Dodge-Float":
                 delay = false;
                 if (!should_hide_active_change (wnck_screen.get_active_window())) {
-                    show_panel ();
                     this.leave_notify_event.disconnect (hide_panel);
+                    show_panel ();
                 } else {
                     hide_panel ();
                 }
@@ -260,10 +261,11 @@ public class Wingpanel.PanelWindow : Gtk.Window {
                 wnck_screen.viewports_changed.connect (viewports_changed);
                 break;
             default:
-                show_panel ();
+                this.leave_notify_event.connect (hide_panel);
                 wnck_screen.active_window_changed.disconnect (active_window_changed);
                 wnck_screen.active_workspace_changed.disconnect (active_workspace_changed);
                 wnck_screen.viewports_changed.disconnect (viewports_changed);
+                show_panel ();
                 break;
         }
     }
