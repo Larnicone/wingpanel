@@ -85,7 +85,7 @@ set (LIB_PKG
   gee-0.8
   gmodule-2.0
   gtk+-3.0>=3.22
-  libwnck-3.0>=3.24
+  libwnck-3.0>=3.14
 )
 find_package(PkgConfig)
 
