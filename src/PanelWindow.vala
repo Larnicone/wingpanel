@@ -21,9 +21,6 @@ public class Wingpanel.PanelWindow : Gtk.Window {
     public Services.PopoverManager popover_manager;
 
     private Widgets.Panel panel;
-
-    uint timeout;
-
     private int monitor_number;
     private int monitor_width;
     private int monitor_height;
@@ -33,8 +30,9 @@ public class Wingpanel.PanelWindow : Gtk.Window {
     private bool expanded = false;
     private int panel_displacement;
     private uint shrink_timeout = 0;
+    private uint timeout;
     private bool hiding = false;
-    private bool strut = true;
+    private bool delay = false;
     private string autohide = Services.PanelSettings.get_default ().autohide;
     private int autohide_delay = Services.PanelSettings.get_default ().delay;
     private Wnck.Screen wnck_screen = Wnck.Screen.get_default ();
@@ -93,26 +91,52 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
     private bool animation_step () {
         if (hiding) {
-            if (panel_displacement >= -1 || popover_manager.current_indicator != null) {
+            if (popover_manager.current_indicator != null) {
                 timeout = 0;
-                if (strut == true) {
-                    update_panel_dimensions ();
-                }
+                return false;
+            }
+            if (panel_displacement >= -1) {
+                timeout = 0;
+                update_struts ();
+                this.enter_notify_event.connect (show_panel);
+                this.motion_notify_event.connect (show_panel);
+                delay = true;
                 return false;
             }
             panel_displacement++;
         } else {
             if (panel_displacement <= panel_height * (-1)) {
                 timeout = 0;
-                if (strut == true) {
-                    update_panel_dimensions ();
+                switch (autohide) {
+                    case "Autohide":
+                        update_struts ();
+                        this.leave_notify_event.connect (hide_panel);
+                        break;
+                    case "Float":
+                        this.leave_notify_event.connect (hide_panel);
+                        break;
+                    case "Dodge":
+                        update_struts ();
+                        if (should_hide_active_change (wnck_screen.get_active_window()))
+                            this.leave_notify_event.connect (hide_panel);
+
+                        break;
+                    case "Dodge-Float":
+                        if (should_hide_active_change (wnck_screen.get_active_window()))
+                            this.leave_notify_event.connect (hide_panel);
+
+                        break;
+                    default:
+                        this.leave_notify_event.disconnect (hide_panel);
+                        update_struts ();
+                        break;
                 }
                 return false;
             }
             panel_displacement--;
         }
 
-        animate_panel ();
+        update_panel_dimensions ();
 
         return true;
     }
@@ -127,8 +151,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
     private void active_window_changed (Wnck.Window? prev_active_window) {
         unowned Wnck.Window? active_window = wnck_screen.get_active_window();
-        if (autohide == "Dodge" || autohide == "Dodge-Float")
-            update_visibility_active_change (active_window);
+        update_visibility_active_change (active_window);
 
         if (prev_active_window != null)
             prev_active_window.state_changed.disconnect (active_window_state_changed);
@@ -138,34 +161,27 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
     private void active_workspace_changed (Wnck.Workspace? prev_active_workspace) {
         unowned Wnck.Window? active_window = wnck_screen.get_active_window();
-        if (autohide == "Dodge" || autohide == "Dodge-Float")
-            update_visibility_active_change (active_window);
+        update_visibility_active_change (active_window);
     }
 
     private void viewports_changed (Wnck.Screen? screen) {
         unowned Wnck.Window? active_window = wnck_screen.get_active_window();
-        if (autohide == "Dodge" || autohide == "Dodge-Float")
-            update_visibility_active_change (active_window);
+        update_visibility_active_change (active_window);
     }
 
     private void active_window_state_changed (Wnck.Window? window,
             Wnck.WindowState changed_mask, Wnck.WindowState new_state) {
-        if (autohide == "Dodge" || autohide == "Dodge-Float")
-            update_visibility_active_change (window);
+        update_visibility_active_change (window);
     }
 
     private void update_visibility_active_change (Wnck.Window? active_window) {
         if (should_hide_active_change (active_window)) {
+            delay = false;
             hide_panel ();
-            this.enter_notify_event.connect (show_panel);
-            this.motion_notify_event.connect (show_panel);
-            this.leave_notify_event.connect (hide_panel);
-
         } else {
-            show_panel ();
-            this.enter_notify_event.disconnect (show_panel);
-            this.motion_notify_event.disconnect (show_panel);
             this.leave_notify_event.disconnect (hide_panel);
+            delay = false;
+            show_panel ();
         }
     }
 
@@ -175,44 +191,7 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         return ((active_window != null) && !active_window.is_minimized () && right_type (active_window)
                 && active_window.is_visible_on_workspace (active_workspace)
                 && active_window.is_in_viewport (active_workspace)
-                && (active_window.get_window_type () == Wnck.WindowType.DIALOG) ?
-                    would_intersect_shown_panel (active_window) :
-                    (in_panel_x_range (active_window) && is_maximized_at_all (active_window)));
-    }
-
-    private bool would_intersect_shown_panel (Wnck.Window? window) {
-        Gdk.Rectangle shown_panel_rect = Gdk.Rectangle ();
-        shown_panel_rect.x = monitor_x;
-        shown_panel_rect.y = monitor_y;
-        shown_panel_rect.width = monitor_width;
-        shown_panel_rect.height = panel_height;
-
-        int xp, yp, widthp, heightp;
-        window.get_geometry (out xp, out yp, out widthp, out heightp);
-
-        Gdk.Rectangle window_rect = Gdk.Rectangle ();
-        window_rect.x = xp;
-        window_rect.width = widthp;
-        if (strut && is_maximized_at_all (window)) {
-            window_rect.y = yp - panel_height;
-            window_rect.height = heightp + panel_height;
-        } else {
-            window_rect.y = yp;
-            window_rect.height = heightp;
-        }
-
-        return window_rect.intersect (shown_panel_rect, null);
-    }
-
-    private bool in_panel_x_range (Wnck.Window? window) {
-        int xp, yp, widthp, heightp;
-        window.get_geometry (out xp, out yp, out widthp, out heightp);
-        if (xp > monitor_x)
-            return (monitor_x + monitor_width > xp);
-        else if (xp < monitor_x)
-            return (xp + widthp > monitor_x);
-        else
-            return (xp + widthp > 0 && monitor_x + monitor_width > 0);
+                && is_maximized_at_all (active_window));
     }
 
     private bool right_type (Wnck.Window? active_window) {
@@ -232,8 +211,9 @@ public class Wingpanel.PanelWindow : Gtk.Window {
             Source.remove (timeout);
         }
         hiding = true;
-        strut = true;
-        Thread.usleep (autohide_delay * 1000);
+        if (delay) {
+            Thread.usleep (autohide_delay * 1000);
+        }
         timeout = Timeout.add (100 / panel_height, animation_step);
         return true;
     }
@@ -242,24 +222,16 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         if (timeout > 0) {
             Source.remove (timeout);
         }
+        this.enter_notify_event.disconnect (show_panel);
+        this.motion_notify_event.disconnect (show_panel);
         hiding = false;
-        switch (autohide) {
-            case "Autohide":
-            case "Dodge":
-                strut = true;
+        if (autohide != "Disabled") {
+            if (delay) {
                 Thread.usleep (autohide_delay * 1000);
-                timeout = Timeout.add (100 / panel_height, animation_step);
-                break;
-            case "Float":
-            case "Dodge-Float":
-                strut = false;
-                Thread.usleep (autohide_delay * 1000);
-                timeout = Timeout.add (100 / panel_height, animation_step);
-                break;
-            default:
-                strut = true;
-                timeout = Timeout.add (300 / panel_height, animation_step);
-                break;
+            }
+            timeout = Timeout.add (100 / panel_height, animation_step);
+        } else {
+            timeout = Timeout.add (300 / panel_height, animation_step);
         }
         return true;
     }
@@ -268,26 +240,27 @@ public class Wingpanel.PanelWindow : Gtk.Window {
         switch (autohide) {
             case "Autohide":
             case "Float":
+                delay = true;
                 hide_panel ();
-                this.enter_notify_event.connect (show_panel);
-                this.motion_notify_event.connect (show_panel);
-                this.leave_notify_event.connect (hide_panel);
                 wnck_screen.active_window_changed.disconnect (active_window_changed);
                 wnck_screen.active_workspace_changed.disconnect (active_workspace_changed);
                 wnck_screen.viewports_changed.disconnect (viewports_changed);
                 break;
             case "Dodge":
             case "Dodge-Float":
-                show_panel ();
+                delay = false;
+                if (!should_hide_active_change (wnck_screen.get_active_window())) {
+                    show_panel ();
+                    this.leave_notify_event.disconnect (hide_panel);
+                } else {
+                    hide_panel ();
+                }
                 wnck_screen.active_window_changed.connect (active_window_changed);
                 wnck_screen.active_workspace_changed.connect (active_workspace_changed);
                 wnck_screen.viewports_changed.connect (viewports_changed);
                 break;
             default:
                 show_panel ();
-                this.enter_notify_event.disconnect (show_panel);
-                this.motion_notify_event.disconnect (show_panel);
-                this.leave_notify_event.disconnect (hide_panel);
                 wnck_screen.active_window_changed.disconnect (active_window_changed);
                 wnck_screen.active_workspace_changed.disconnect (active_workspace_changed);
                 wnck_screen.viewports_changed.disconnect (viewports_changed);
@@ -312,25 +285,6 @@ public class Wingpanel.PanelWindow : Gtk.Window {
 
         this.move (monitor_x, monitor_y - (panel_height + panel_displacement));
 
-        update_struts ();
-    }
-
-    private void animate_panel () {
-        panel_height = panel.get_allocated_height ();
-
-        monitor_number = screen.get_primary_monitor ();
-        Gdk.Rectangle monitor_dimensions;
-        this.screen.get_monitor_geometry (monitor_number, out monitor_dimensions);
-
-        monitor_width = monitor_dimensions.width;
-        monitor_height = monitor_dimensions.height;
-
-        this.set_size_request (monitor_width, (popover_manager.current_indicator != null ? monitor_height : -1));
-
-        monitor_x = monitor_dimensions.x;
-        monitor_y = monitor_dimensions.y;
-
-        this.move (monitor_x, monitor_y - (panel_height + panel_displacement));
     }
 
     private void update_visual () {
