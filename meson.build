@@ -29,6 +29,7 @@ gio_dep = dependency('gio-2.0')
 gio_unix_dep = dependency('gio-unix-2.0')
 gmodule_dep = dependency('gmodule-2.0')
 gtk_dep = dependency('gtk+-3.0', version: '>=3.10')
+libwnck_dep = dependency('libwnck-3.0', version: '>=3.14')
 gee_dep = dependency('gee-0.8')
 granite_dep = dependency('granite')
 
