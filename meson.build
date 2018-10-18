@@ -14,7 +14,8 @@ add_project_arguments([
 
 add_project_arguments([
         '-DGETTEXT_PACKAGE="wingpanel"',
-        '-DG_LOG_DOMAIN="wingpanel"'
+        '-DG_LOG_DOMAIN="wingpanel"',
+        '-DWNCK_I_KNOW_THIS_IS_UNSTABLE'
     ],
     language: 'c'
 )
